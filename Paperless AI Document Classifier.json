@@ -1,0 +1,966 @@
+{
+  "name": "Paperless AI Document Classifier",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "dfdab0dc-a263-4176-bb9f-72e929e62fd9",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        2064,
+        5824
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "config-base-url",
+              "name": "baseUrl",
+              "value": "http://paperless.selfhosted.svc.cluster.local:8000",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "300d1558-80fc-4aa4-b4cc-10f8a9f3d739",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        2288,
+        5824
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/tags/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "name__iexact",
+              "value": "ai-processed"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "24da0822-a30e-4d4b-baa6-564af63139e3",
+      "name": "Get AI Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2512,
+        5824
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/documents/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "tags__id__none",
+              "value": "={{ $('Set AI Tag ID').first().json.aiProcessedTagId }}"
+            },
+            {
+              "name": "page_size",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.next }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.next }}"
+            }
+          }
+        }
+      },
+      "id": "c0fdc382-2021-44c7-b5ab-d98f82608730",
+      "name": "Fetch Unprocessed Documents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4080,
+        5728
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "results",
+        "options": {}
+      },
+      "id": "8b4d4a46-153a-46c6-ba38-3993b9be2d23",
+      "name": "Split Out Documents",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        4304,
+        5728
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/documents/{{ $json.id }}/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "73a39b5a-4341-4375-8f53-152733020403",
+      "name": "Fetch Document Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4752,
+        5600
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "324816f3-a6a5-419b-bada-32888bb0da2f",
+      "name": "Loop Over Documents",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        4528,
+        5728
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this document and classify it.\n\n### Original Filename:\n{{ $json.document.original_file_name }}\n\n### Created:\n{{ $json.document.created }}\n\n### Title:\n{{ $json.document.title }}\n\n### Content:\n{{ $json.document.content }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a document analysis AI for a multilingual user.\nDocuments may be in English, Portuguese (Brazil), or Polish.\n\nYour task is to extract structured metadata for document classification.\n\nFIELD RULES:\n\n1) tags\n- Choose ONLY from the list below.\n- Return tags in lowercase exactly as shown.\n- You may return MULTIPLE tags when applicable.\n- Return an empty array if no tag applies.\n\nALLOWED TAGS:\n{{ Object.keys($json.tagMap).join(', ') }}\n\n2) correspondent\n- The organization that ISSUED or SENT this document (not the recipient).\n- Look for: letterhead, logo, header, sender address, signature block, URLs, email domains, copyright notices.\n- IMPORTANT: Only use an existing correspondent if the name genuinely matches the document's issuer. Do NOT default to existing entries just because the list is short.\n- If the issuer is not in the existing list, return the organization name exactly as written in the document (do NOT translate).\n- Return null only if the document has no identifiable issuing organization.\n\nEXISTING CORRESPONDENTS (use only if genuinely matching):\n{{ Object.values($json.correspondentMap).map(c => c.name).slice(0,300).join(', ') || 'none yet' }}\n\n3) document_type\n- Choose from the existing list below OR one of the canonical types.\n- Return in lowercase.\n- Return null if nothing fits.\n\nEXISTING DOCUMENT TYPES:\n{{ Object.keys($json.documentTypeMap).slice(0,100).join(', ') || 'none yet' }}\n\nCANONICAL TYPES (use lowercase):\ninvoice, receipt, contract, statement, letter, certificate, report, form, notification, id document, medical record, insurance document, tax document, legal document, utility bill, bank statement, payslip, ticket, warranty, manual\n\n4) title\n- Concise, descriptive title in English (translate if needed).\n- Maximum 80 characters.\n\n5) date\n- Primary document date (issue date, not due date) in YYYY-MM-DD format.\n- Return null if no date found."
+        }
+      },
+      "id": "c4da24fb-dc84-490d-a39c-f819b49e4ff9",
+      "name": "Classify Document",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        5200,
+        5600
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\": \"object\", \"properties\": {\"tags\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}, \"description\": \"Array of tag names\"}, \"correspondent\": {\"type\": [\"string\", \"null\"], \"description\": \"Correspondent/issuer name or null\"}, \"document_type\": {\"type\": [\"string\", \"null\"], \"description\": \"Document type or null\"}, \"title\": {\"type\": \"string\", \"description\": \"Document title\"}, \"date\": {\"type\": [\"string\", \"null\"], \"description\": \"Date in YYYY-MM-DD format or null\"}}, \"required\": [\"tags\", \"correspondent\", \"document_type\", \"title\", \"date\"]}"
+      },
+      "id": "bc0df17d-c017-4889-8c5c-7ecbbe4e0f1d",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5344,
+        5824
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const dictionaries = $('Build Dictionaries').first().json;\nconst documentDetails = $('Fetch Document Details').first().json;\n\nconst toLowerCase = (s) => {\n  if (s == null) return null;\n  const trimmed = s.toString().trim();\n  return trimmed.length > 0 ? trimmed.toLowerCase() : null;\n};\n\nlet aiOutput = $json.output ?? $json;\nif (typeof aiOutput === 'string') {\n  aiOutput = JSON.parse(aiOutput);\n}\n\nconst documentId = documentDetails.id;\n\n// Tags\nconst tagIds = (Array.isArray(aiOutput.tags) ? aiOutput.tags : [])\n  .map(tagName => dictionaries.tagMap[toLowerCase(tagName)])\n  .filter(id => typeof id === 'number');\ntagIds.push(dictionaries.aiProcessedTagId);\n\n// Correspondent\nconst correspondentRaw = aiOutput.correspondent;\nconst correspondentKey = toLowerCase(correspondentRaw);\nconst correspondentMatch = correspondentKey ? dictionaries.correspondentMap[correspondentKey] : null;\nconst correspondentId = correspondentMatch ? correspondentMatch.id : null;\nconst correspondentName = correspondentRaw?.trim() || null;\nconst needCreateCorrespondent = !!(correspondentName && !correspondentId);\n\n// Document type\nconst documentTypeRaw = aiOutput.document_type;\nconst documentTypeKey = toLowerCase(documentTypeRaw);\nconst documentTypeId = documentTypeKey ? dictionaries.documentTypeMap[documentTypeKey] : null;\nconst needCreateDocumentType = !!(documentTypeKey && !documentTypeId);\n\nconst patchBody = {\n  tags: tagIds,\n  correspondent: correspondentId,\n  document_type: documentTypeId\n};\n\nconst title = aiOutput.title?.trim() || null;\nconst date = aiOutput.date?.trim() || null;\nif (title) patchBody.title = title;\nif (date) patchBody.created_date = date;\n\nreturn {\n  json: {\n    id: documentId,\n    patchBody,\n    correspondentName,\n    correspondentKey,\n    documentTypeName: documentTypeKey,\n    needCreateCorrespondent,\n    needCreateDocumentType\n  }\n};"
+      },
+      "id": "21821008-57f9-4b2f-9ded-573e50630212",
+      "name": "Plan Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5552,
+        5600
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "0cc9a5a5-f0b5-4958-95b0-e879277003c1",
+              "leftValue": "={{ $json.needCreateCorrespondent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1b55696b-5eb4-46c6-9608-d34e3f38defd",
+      "name": "Need Create Correspondent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5776,
+        5600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/api/correspondents/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { name: $json.correspondentName } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "e6821568-9c2a-472f-9a7b-bc1587920936",
+      "name": "Create Correspondent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        6000,
+        5520
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ac4a7c2c-12b0-4260-a292-4c91bd2ac974",
+              "leftValue": "={{ $json.needCreateDocumentType }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d8303a4-d9c4-4c48-9435-87f0db37eda9",
+      "name": "Need Create Document Type?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        6448,
+        5600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/api/document_types/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { name: $json.documentTypeName } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "3baa9a55-0138-4fb4-b5e8-fd7f6e0c4f77",
+      "name": "Create Document Type",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        6672,
+        5520
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').first().json.baseUrl }}/api/documents/{{ $json.id }}/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.patchBody }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d643dc10-4d33-40e2-9814-7c92b96a1b13",
+      "name": "Patch Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        7120,
+        5728
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/tags/?page_size=1000",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.next }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.next }}"
+            }
+          }
+        }
+      },
+      "id": "def6ca1f-620f-494e-81b7-80075d43eebd",
+      "name": "Fetch Tags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3184,
+        5728
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/correspondents/?page_size=1000",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.next }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.next }}"
+            }
+          }
+        }
+      },
+      "id": "1dd10afa-c02c-401f-a3db-9cb08123d3ba",
+      "name": "Fetch Correspondents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3408,
+        5728
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/document_types/?page_size=1000",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.next }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.next }}"
+            }
+          }
+        }
+      },
+      "id": "a96be20e-02b7-4459-90c3-5d4ef2ec6a1d",
+      "name": "Fetch Document Types",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3632,
+        5728
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WIqKYFyhrEWrX0dg",
+          "name": "Paperless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build dictionaries ONCE from paginated API results\n// This runs BEFORE the loop starts\n\nconst aggregateResults = (nodeName) => {\n  const nodeItems = $(nodeName).all();\n  let allResults = [];\n  for (const item of nodeItems) {\n    if (item.json.results && Array.isArray(item.json.results)) {\n      allResults = allResults.concat(item.json.results);\n    }\n  }\n  return allResults;\n};\n\nconst tags = aggregateResults('Fetch Tags');\nconst correspondents = aggregateResults('Fetch Correspondents');\nconst documentTypes = aggregateResults('Fetch Document Types');\nconst aiTagData = $('Set AI Tag ID').first().json;\n\nconst toLowerCase = (s) => (s ?? '').toString().trim().toLowerCase();\n\nconst aiProcessedTagId = aiTagData.aiProcessedTagId;\n\n// Filter out ai-processed tag from the list shown to AI\nconst filteredTags = tags.filter(tag => tag.id !== aiProcessedTagId);\n\n// Tags: lowercase keys for matching\nconst tagMap = Object.fromEntries(\n  filteredTags.map(tag => [toLowerCase(tag.name), tag.id])\n);\n\n// Correspondents: case-insensitive lookup, preserve original name\nconst correspondentMap = Object.fromEntries(\n  correspondents.map(c => [toLowerCase(c.name), { id: c.id, name: c.name }])\n);\n\n// Document types: lowercase keys\nconst documentTypeMap = Object.fromEntries(\n  documentTypes.map(dt => [toLowerCase(dt.name), dt.id])\n);\n\nreturn [{\n  json: {\n    tagMap,\n    correspondentMap,\n    documentTypeMap,\n    aiProcessedTagId\n  }\n}];"
+      },
+      "id": "4ac66697-8838-4482-9f05-b47fafa55dd3",
+      "name": "Build Dictionaries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3856,
+        5728
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Merge current document with dictionaries built earlier\nconst docDetails = $json;\nconst dictionaries = $('Build Dictionaries').first().json;\n\nreturn {\n  json: {\n    document: docDetails,\n    ...dictionaries\n  }\n};"
+      },
+      "id": "781c6718-80cb-4e14-8878-e1f7995d7fc7",
+      "name": "Merge Document Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4976,
+        5600
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "ead66cfc-586e-42d4-826a-53a9adca9fd4",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        5216,
+        5824
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "bCTist9FraPxkRS7",
+          "name": "OpenRouter API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "7b55a515-2765-4745-981c-cb8439a20275",
+              "leftValue": "={{ ($json.results ?? []).length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5b02268a-7f98-4304-b8f7-ac776e5ec56e",
+      "name": "AI Tag Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2736,
+        5824
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3a93e54f-ecb7-4474-8bf8-216da556d175-1",
+              "name": "aiProcessedTagId",
+              "value": "={{ $json.results[0].id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5fb2f59f-84f9-4cc0-9f05-54b5bbb6cd6d",
+      "name": "Set AI Tag ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        2960,
+        5728
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Required tag \"ai-processed\" not found in Paperless. Please create it before running this workflow."
+      },
+      "id": "4d3a6d5e-1776-4860-91a7-1f70c3d39491",
+      "name": "Stop Missing AI Tag",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2960,
+        5920
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Merge created correspondent ID back into patch body\nconst planData = $('Plan Updates').first().json;\nconst dictionaries = $('Build Dictionaries').first().json;\nconst createdId = $json.id;\n\n// Fallback logic:\n// 1. Use created ID if successful\n// 2. Try to find existing correspondent by key (handles duplicate name errors)\n// 3. Fall back to original value (null if doesn't exist)\nconst existingId = dictionaries.correspondentMap[planData.correspondentKey]?.id;\nconst correspondentId = createdId ?? existingId ?? planData.patchBody.correspondent;\n\nreturn {\n  json: {\n    ...planData,\n    patchBody: {\n      ...planData.patchBody,\n      correspondent: correspondentId\n    }\n  }\n};"
+      },
+      "id": "f94545d3-b97e-42a4-9f72-06cf99821f5b",
+      "name": "Merge Correspondent ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6224,
+        5520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Merge created document type ID back into patch body\n// Get data from Need Create Document Type? IF node, which has the full context\n// (either from Plan Updates directly, or from Merge Correspondent ID if correspondent was created)\nconst planData = $('Need Create Document Type?').first().json;\nconst dictionaries = $('Build Dictionaries').first().json;\nconst createdId = $json.id;\n\n// Fallback logic:\n// 1. Use created ID if successful\n// 2. Try to find existing document type by name (handles duplicate name errors)\n// 3. Fall back to original value (null if doesn't exist)\nconst existingId = dictionaries.documentTypeMap[planData.documentTypeName];\nconst documentTypeId = createdId ?? existingId ?? planData.patchBody.document_type;\n\nreturn {\n  json: {\n    ...planData,\n    patchBody: {\n      ...planData.patchBody,\n      document_type: documentTypeId\n    }\n  }\n};"
+      },
+      "id": "9a296008-9098-4f1e-8c43-e3f8aaa4ec55",
+      "name": "Merge Document Type ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6896,
+        5520
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get AI Tag": {
+      "main": [
+        [
+          {
+            "node": "AI Tag Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Unprocessed Documents": {
+      "main": [
+        [
+          {
+            "node": "Split Out Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Dictionaries": {
+      "main": [
+        [
+          {
+            "node": "Fetch Unprocessed Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Documents": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Document Details": {
+      "main": [
+        [
+          {
+            "node": "Merge Document Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Document Data": {
+      "main": [
+        [
+          {
+            "node": "Classify Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Classify Document",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Document": {
+      "main": [
+        [
+          {
+            "node": "Plan Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Updates": {
+      "main": [
+        [
+          {
+            "node": "Need Create Correspondent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Create Correspondent?": {
+      "main": [
+        [
+          {
+            "node": "Create Correspondent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Need Create Document Type?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Correspondent": {
+      "main": [
+        [
+          {
+            "node": "Merge Correspondent ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Create Document Type?": {
+      "main": [
+        [
+          {
+            "node": "Create Document Type",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Patch Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Document Type": {
+      "main": [
+        [
+          {
+            "node": "Merge Document Type ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch Document": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tags": {
+      "main": [
+        [
+          {
+            "node": "Fetch Correspondents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Correspondents": {
+      "main": [
+        [
+          {
+            "node": "Fetch Document Types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Document Types": {
+      "main": [
+        [
+          {
+            "node": "Build Dictionaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Documents": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Fetch Document Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Document",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Tag Found?": {
+      "main": [
+        [
+          {
+            "node": "Set AI Tag ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop Missing AI Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set AI Tag ID": {
+      "main": [
+        [
+          {
+            "node": "Fetch Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Correspondent ID": {
+      "main": [
+        [
+          {
+            "node": "Need Create Document Type?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Document Type ID": {
+      "main": [
+        [
+          {
+            "node": "Patch Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get AI Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "e8d106df-fdbd-4bfa-bc66-0003c8df33ac",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a7b845fcef8161f11eeaec81c62713e8142338c2b88e9411b8276e6d7fb00040"
+  },
+  "id": "Y9SFkFEYO3bJtdKV2onWt",
+  "tags": []
+}
