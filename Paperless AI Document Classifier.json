@@ -6,7 +6,8 @@
         "rule": {
           "interval": [
             {
-              "field": "hours"
+              "field": "hours",
+              "triggerAtMinute": 10
             }
           ]
         }
@@ -17,7 +18,7 @@
       "typeVersion": 1.3,
       "position": [
         2064,
-        5824
+        5184
       ]
     },
     {
@@ -40,7 +41,7 @@
       "typeVersion": 3.3,
       "position": [
         2288,
-        5824
+        5184
       ]
     },
     {
@@ -71,7 +72,7 @@
       "typeVersion": 4.3,
       "position": [
         2512,
-        5824
+        5184
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -120,7 +121,7 @@
       "typeVersion": 4.3,
       "position": [
         4080,
-        5728
+        5088
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -140,7 +141,7 @@
       "typeVersion": 1,
       "position": [
         4304,
-        5728
+        5088
       ]
     },
     {
@@ -163,7 +164,7 @@
       "typeVersion": 4.3,
       "position": [
         4752,
-        5600
+        4960
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -182,25 +183,7 @@
       "typeVersion": 3,
       "position": [
         4528,
-        5728
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Analyze this document and classify it.\n\n### Original Filename:\n{{ $json.document.original_file_name }}\n\n### Created:\n{{ $json.document.created }}\n\n### Title:\n{{ $json.document.title }}\n\n### Content:\n{{ $json.document.content }}",
-        "hasOutputParser": true,
-        "options": {
-          "systemMessage": "=You are a document analysis AI for a multilingual user.\nDocuments may be in English, Portuguese (Brazil), or Polish.\n\nYour task is to extract structured metadata for document classification.\n\nFIELD RULES:\n\n1) tags\n- Choose ONLY from the list below.\n- Return tags in lowercase exactly as shown.\n- You may return MULTIPLE tags when applicable.\n- Return an empty array if no tag applies.\n\nALLOWED TAGS:\n{{ Object.keys($json.tagMap).join(', ') }}\n\n2) correspondent\n- The organization that ISSUED or SENT this document (not the recipient).\n- Look for: letterhead, logo, header, sender address, signature block, URLs, email domains, copyright notices.\n- IMPORTANT: Only use an existing correspondent if the name genuinely matches the document's issuer. Do NOT default to existing entries just because the list is short.\n- If the issuer is not in the existing list, return the organization name exactly as written in the document (do NOT translate).\n- Return null only if the document has no identifiable issuing organization.\n\nEXISTING CORRESPONDENTS (use only if genuinely matching):\n{{ Object.values($json.correspondentMap).map(c => c.name).slice(0,300).join(', ') || 'none yet' }}\n\n3) document_type\n- Choose from the existing list below OR one of the canonical types.\n- Return in lowercase.\n- Return null if nothing fits.\n\nEXISTING DOCUMENT TYPES:\n{{ Object.keys($json.documentTypeMap).slice(0,100).join(', ') || 'none yet' }}\n\nCANONICAL TYPES (use lowercase):\ninvoice, receipt, contract, statement, letter, certificate, report, form, notification, id document, medical record, insurance document, tax document, legal document, utility bill, bank statement, payslip, ticket, warranty, manual\n\n4) title\n- Concise, descriptive title in English (translate if needed).\n- Maximum 80 characters.\n\n5) date\n- Primary document date (issue date, not due date) in YYYY-MM-DD format.\n- Return null if no date found."
-        }
-      },
-      "id": "c4da24fb-dc84-490d-a39c-f819b49e4ff9",
-      "name": "Classify Document",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1.7,
-      "position": [
-        5200,
-        5600
+        5088
       ]
     },
     {
@@ -214,7 +197,7 @@
       "typeVersion": 1.3,
       "position": [
         5344,
-        5824
+        5184
       ]
     },
     {
@@ -228,7 +211,7 @@
       "typeVersion": 2,
       "position": [
         5552,
-        5600
+        4960
       ]
     },
     {
@@ -261,7 +244,7 @@
       "typeVersion": 2,
       "position": [
         5776,
-        5600
+        4960
       ]
     },
     {
@@ -288,7 +271,7 @@
       "typeVersion": 4.3,
       "position": [
         6000,
-        5520
+        4896
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -327,7 +310,7 @@
       "typeVersion": 2,
       "position": [
         6448,
-        5600
+        4960
       ]
     },
     {
@@ -354,7 +337,7 @@
       "typeVersion": 4.3,
       "position": [
         6672,
-        5520
+        4896
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -387,7 +370,7 @@
       "typeVersion": 4.3,
       "position": [
         7120,
-        5728
+        5088
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -423,7 +406,7 @@
       "typeVersion": 4.3,
       "position": [
         3184,
-        5728
+        5088
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -459,7 +442,7 @@
       "typeVersion": 4.3,
       "position": [
         3408,
-        5728
+        5088
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -495,7 +478,7 @@
       "typeVersion": 4.3,
       "position": [
         3632,
-        5728
+        5088
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -514,7 +497,7 @@
       "typeVersion": 2,
       "position": [
         3856,
-        5728
+        5088
       ]
     },
     {
@@ -528,30 +511,8 @@
       "typeVersion": 2,
       "position": [
         4976,
-        5600
+        4960
       ]
-    },
-    {
-      "parameters": {
-        "model": "anthropic/claude-sonnet-4.5",
-        "options": {
-          "temperature": 0.1
-        }
-      },
-      "id": "ead66cfc-586e-42d4-826a-53a9adca9fd4",
-      "name": "OpenRouter Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "typeVersion": 1,
-      "position": [
-        5216,
-        5824
-      ],
-      "credentials": {
-        "openRouterApi": {
-          "id": "bCTist9FraPxkRS7",
-          "name": "OpenRouter API"
-        }
-      }
     },
     {
       "parameters": {
@@ -583,7 +544,7 @@
       "typeVersion": 2,
       "position": [
         2736,
-        5824
+        5184
       ]
     },
     {
@@ -606,7 +567,7 @@
       "typeVersion": 3.3,
       "position": [
         2960,
-        5728
+        5088
       ]
     },
     {
@@ -619,7 +580,7 @@
       "typeVersion": 1,
       "position": [
         2960,
-        5920
+        5280
       ]
     },
     {
@@ -633,7 +594,7 @@
       "typeVersion": 2,
       "position": [
         6224,
-        5520
+        4896
       ]
     },
     {
@@ -647,8 +608,57 @@
       "typeVersion": 2,
       "position": [
         6896,
-        5520
+        4896
       ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "github_copilot/gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "github_copilot/gpt-5-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        5216,
+        5184
+      ],
+      "id": "1ca959f1-001a-4573-8fcc-ea9631a6b4ec",
+      "name": "LiteLLM Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Vvl8RVPpQyA7VdMe",
+          "name": "LiteLLM API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this document and classify it.\n\n### Original Filename:\n{{ $json.document.original_file_name }}\n\n### Created:\n{{ $json.document.created }}\n\n### Title:\n{{ $json.document.title }}\n\n### Content:\n{{ $json.document.content }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are a document analysis AI for a multilingual user.\nDocuments may be in English, Portuguese (Brazil), or Polish.\n\nYour task is to extract structured metadata for document classification.\n\nFIELD RULES:\n\n1) tags\n- Choose ONLY from the list below.\n- Return tags in lowercase exactly as shown.\n- You may return MULTIPLE tags when applicable.\n- Return an empty array if no tag applies.\n\nALLOWED TAGS:\n{{ Object.keys($json.tagMap).join(', ') }}\n\n2) correspondent\n- The organization that ISSUED or SENT this document (not the recipient).\n- Look for: letterhead, logo, header, sender address, signature block, URLs, email domains, copyright notices.\n- IMPORTANT: Only use an existing correspondent if the name genuinely matches the document's issuer. Do NOT default to existing entries just because the list is short.\n- If the issuer is not in the existing list, return the organization name exactly as written in the document (do NOT translate).\n- Return null only if the document has no identifiable issuing organization.\n\nEXISTING CORRESPONDENTS (use only if genuinely matching):\n{{ Object.values($json.correspondentMap).map(c => c.name).slice(0,300).join(', ') || 'none yet' }}\n\n3) document_type\n- Choose from the existing list below OR one of the canonical types.\n- Return in lowercase.\n- Return null if nothing fits.\n\nEXISTING DOCUMENT TYPES:\n{{ Object.keys($json.documentTypeMap).slice(0,100).join(', ') || 'none yet' }}\n\nCANONICAL TYPES (use lowercase):\ninvoice, receipt, contract, statement, letter, certificate, report, form, notification, id document, medical record, insurance document, tax document, legal document, utility bill, bank statement, payslip, ticket, warranty, manual\n\n4) title\n- Concise, descriptive title in English (translate if needed).\n- Maximum 80 characters.\n\n5) date\n- Primary document date (issue date, not due date) in YYYY-MM-DD format.\n- Return null if no date found."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        5200,
+        4960
+      ],
+      "id": "828a1298-4406-4807-b5e4-309e2cacb630",
+      "name": "Classify Document"
     }
   ],
   "pinData": {},
@@ -736,17 +746,6 @@
           {
             "node": "Classify Document",
             "type": "ai_outputParser",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Classify Document": {
-      "main": [
-        [
-          {
-            "node": "Plan Updates",
-            "type": "main",
             "index": 0
           }
         ]
@@ -877,17 +876,6 @@
         ]
       ]
     },
-    "OpenRouter Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Classify Document",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "AI Tag Found?": {
       "main": [
         [
@@ -949,6 +937,28 @@
           }
         ]
       ]
+    },
+    "LiteLLM Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Document",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Document": {
+      "main": [
+        [
+          {
+            "node": "Plan Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -956,7 +966,7 @@
     "executionOrder": "v1",
     "availableInMCP": false
   },
-  "versionId": "e8d106df-fdbd-4bfa-bc66-0003c8df33ac",
+  "versionId": "72410c77-45f0-4dd0-9223-35619d206530",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "a7b845fcef8161f11eeaec81c62713e8142338c2b88e9411b8276e6d7fb00040"
