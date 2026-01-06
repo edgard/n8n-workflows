@@ -1,0 +1,445 @@
+{
+  "name": "Home Notification Enricher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alert-enricher",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Webhook",
+      "position": [
+        0,
+        -48
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "bfe23a4d-bf0b-40d8-93d1-a1b3c63b975f",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"processing\", \"received\": $now.toISO() } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+      "name": "Respond Accepted",
+      "position": [
+        224,
+        -48
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplication: Skip messages seen within the last 2 minutes\nconst DEDUP_WINDOW_MS = 2 * 60 * 1000; // 2 minutes\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.messageHashes) {\n  staticData.messageHashes = {};\n}\n\nconst now = Date.now();\n\n// Clean up expired entries\nfor (const hash in staticData.messageHashes) {\n  if (now - staticData.messageHashes[hash] > DEDUP_WINDOW_MS) {\n    delete staticData.messageHashes[hash];\n  }\n}\n\n// Get the raw input payload\nconst rawPayload = $input.first().json;\n\n// Create hash from the entire payload using cyrb53 (64-bit, low collision)\nconst payloadStr = JSON.stringify(rawPayload);\nconst cyrb53 = (str, seed = 0) => {\n  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;\n  for (let i = 0, ch; i < str.length; i++) {\n    ch = str.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 2654435761);\n    h2 = Math.imul(h2 ^ ch, 1597334677);\n  }\n  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);\n  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);\n  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);\n  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);\n  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);\n};\nconst hash = cyrb53(payloadStr);\n\n// Check for duplicate\nif (staticData.messageHashes[hash]) {\n  return [{ json: { isDuplicate: true, hash } }];\n}\n\n// Store hash and pass through\nstaticData.messageHashes[hash] = now;\n\nreturn [{\n  json: {\n    isDuplicate: false,\n    hash,\n    rawPayload,\n    receivedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-345678901234",
+      "name": "Dedup Check",
+      "position": [
+        448,
+        -48
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "dedup-condition",
+              "leftValue": "={{ $json.isDuplicate }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
+        },
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-0123-def0-456789012345",
+      "name": "Is Duplicate?",
+      "position": [
+        672,
+        -48
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {},
+      "id": "e5f6a7b8-c9d0-1234-ef01-567890123456",
+      "name": "Skip Duplicate",
+      "position": [
+        896,
+        -144
+      ],
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare message for AI Agent\nconst input = $input.first().json;\nconst rawPayload = input.rawPayload;\nconst receivedAt = input.receivedAt;\n\n// Format the payload as a string for the AI\nconst payloadStr = JSON.stringify(rawPayload, null, 2);\n\nconst chatInput = `Webhook payload received at ${receivedAt}:\\n\\n${payloadStr}\\n\\nAnalyze this payload, determine what type of message it is (alert or notification), extract relevant information, and enrich it appropriately. Use available tools if needed to gather additional context.`;\n\nreturn [{\n  json: {\n    rawPayload,\n    receivedAt,\n    chatInput\n  }\n}];"
+      },
+      "id": "a7b8c9d0-e1f2-3456-0123-789012345678",
+      "name": "Prepare AI Context",
+      "position": [
+        896,
+        48
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a home notification assistant. Your job is to enrich alerts with REAL investigation data.\n\n**CRITICAL: For ALERTS you MUST use tools to investigate before responding!**\n\n**Tool Usage Requirements:**\n- Gatus/uptime alerts → Call tools to check: current endpoint status in Gatus, Kubernetes pod status, recent pod logs\n- Home Assistant alerts → Call tools to check: entity states, related sensors, recent history\n- Kubernetes alerts → Call tools to check: pod status, logs, events\n- Media notifications (Radarr/Sonarr downloads) → NO tools needed, just format nicely\n\n**For a Gatus alert like \"Plex is down\", you MUST:**\n1. Use Gatus tools to check the endpoint's current status and history\n2. Use Kubernetes tools to check if the plex pod is running, get recent logs\n3. Include what you found in the summary\n\n**Writing Style:**\n- Plain language, no technical jargon\n- No timestamps or ISO dates\n- Conversational, like texting a family member\n\n**Output:**\n- title: \"Source: Short description\" (e.g., \"Gatus: Plex down\")\n- summary: What happened + what you found from tools. Example: \"Plex failed its health check. The plex pod is running but showing connection errors in the logs.\"\n- context_gathered: For ALERTS, include brief bullet points from tool findings. Leave empty for notifications.\n- suggested_actions: For ALERTS with actionable findings, include specific actions. Leave empty if nothing actionable or for notifications.\n- source: Service name"
+        }
+      },
+      "id": "b8c9d0e1-f2a3-4567-1234-890123456789",
+      "name": "AI Agent",
+      "position": [
+        1184,
+        48
+      ],
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "github_copilot/gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "c9d0e1f2-a3b4-5678-2345-901234567890",
+      "name": "OpenAI Chat Model",
+      "position": [
+        1120,
+        272
+      ],
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "openAiApi": {
+          "id": "Vvl8RVPpQyA7VdMe",
+          "name": "LiteLLM API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://metamcp.edgard.org/metamcp/infra/mcp",
+        "authentication": "bearerAuth",
+        "options": {}
+      },
+      "id": "meta-mcp-tool-001",
+      "name": "MetaMCP",
+      "position": [
+        1248,
+        272
+      ],
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "BibcsgN2mXzO0b0v",
+          "name": "MetaMCP API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"message_type\": {\n      \"type\": \"string\",\n      \"enum\": [\"alert\", \"notification\"],\n      \"description\": \"alert or notification\"\n    },\n    \"title\": {\n      \"type\": \"string\",\n      \"description\": \"Very short title (under 40 chars)\"\n    },\n    \"severity\": {\n      \"type\": \"string\",\n      \"enum\": [\"critical\", \"warning\", \"info\"]\n    },\n    \"emoji\": {\n      \"type\": \"string\",\n      \"description\": \"Single emoji\"\n    },\n    \"summary\": {\n      \"type\": \"string\",\n      \"description\": \"One sentence max\"\n    },\n    \"context_gathered\": {\n      \"type\": \"string\",\n      \"description\": \"Brief bullet points from tool findings. Empty for notifications.\"\n    },\n    \"suggested_actions\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" },\n      \"description\": \"Only specific actions based on findings. Empty if nothing actionable.\"\n    },\n    \"source\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\"message_type\", \"title\", \"severity\", \"emoji\", \"summary\", \"source\"]\n}"
+      },
+      "id": "f2a3b4c5-d6e7-8901-5678-234567890123",
+      "name": "Structured Output Parser",
+      "position": [
+        1376,
+        272
+      ],
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "success-condition",
+              "leftValue": "={{ $json.output.title }}",
+              "operator": {
+                "operation": "notEmpty",
+                "type": "string"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          }
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a3b4c5d6-e7f8-9012-6789-345678901234",
+      "name": "AI Success?",
+      "position": [
+        1584,
+        48
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format enriched message as HTML for Telegram\nconst output = $input.first().json.output;\n\nconst escapeHtml = (text) => {\n  if (!text) return '';\n  return String(text)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n};\n\nconst emoji = output.emoji || '🔔';\nconst title = escapeHtml(output.title || 'Message');\nconst summary = escapeHtml(output.summary || '');\n\nconst message = `${emoji} <b>${title}</b>\\n\\n${summary}`;\n\n// Alerts play sound, notifications are silent\nconst disableNotification = output.message_type === 'notification';\n\nreturn [{ json: { message, messageType: output.message_type, disableNotification, success: true } }];"
+      },
+      "id": "b4c5d6e7-f8a9-0123-7890-456789012345",
+      "name": "Format HTML Message",
+      "position": [
+        1808,
+        -48
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fallback formatter when AI enrichment fails\n// Get input from the item that triggered this branch (via AI Agent error output)\nconst currentItem = $input.first().json;\n\n// Try to get context from Prepare AI Context node, fall back to current item\nlet rawPayload, receivedAt;\ntry {\n  const preparedContext = $('Prepare AI Context').first().json;\n  rawPayload = preparedContext.rawPayload;\n  receivedAt = preparedContext.receivedAt;\n} catch (e) {\n  // If Prepare AI Context isn't accessible, try to extract from current item\n  rawPayload = currentItem.rawPayload || currentItem;\n  receivedAt = currentItem.receivedAt || new Date().toISOString();\n}\n\nconst escapeHtml = (text) => {\n  if (!text) return '';\n  return String(text)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n};\n\n// Try to extract some basic info from common payload formats\nlet title = 'Webhook Message';\nlet source = 'unknown';\n\nif (rawPayload.eventType) {\n  // *arr format\n  title = rawPayload.eventType;\n  source = rawPayload.instanceName || 'arr';\n} else if (rawPayload.alertname) {\n  // AlertManager format\n  title = rawPayload.alertname;\n  source = 'alertmanager';\n} else if (rawPayload.event_type) {\n  // Home Assistant format\n  title = rawPayload.event_type;\n  source = 'homeassistant';\n}\n\nconst payloadStr = escapeHtml(JSON.stringify(rawPayload, null, 2));\n\nconst telegramMessage = `🔔 <b>${escapeHtml(title)}</b>\\n\\n⚠️ <i>AI enrichment unavailable</i>\\n\\n<b>Source:</b> ${escapeHtml(source)}\\n<b>Received:</b> ${escapeHtml(receivedAt)}\\n\\n<b>Raw Payload:</b>\\n<pre>${payloadStr}</pre>`;\n\n// Fallback always plays sound (assume it's important)\nreturn [{ json: { message: telegramMessage, disableNotification: false, success: false } }];"
+      },
+      "id": "c5d6e7f8-a9b0-1234-8901-567890123456",
+      "name": "Fallback Format",
+      "position": [
+        1808,
+        144
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "52094995",
+        "resource": "message",
+        "operation": "sendMessage",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": "={{ $json.disableNotification === true }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "d6e7f8a9-b0c1-2345-9012-678901234567",
+      "name": "Send Telegram",
+      "position": [
+        2032,
+        48
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "7c608e11-ddd0-4edc-9c1a-9d90a52c5172",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "4dyOOpYrre5uMlm9",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "AI Success?",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "AI Success?": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Format HTML Message",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Fallback Format",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Dedup Check": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Is Duplicate?",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fallback Format": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Send Telegram",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Format HTML Message": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Send Telegram",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Skip Duplicate",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Prepare AI Context",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "MetaMCP": {
+      "ai_tool": [
+        [
+          {
+            "index": 0,
+            "node": "AI Agent",
+            "type": "ai_tool"
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "AI Agent",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    },
+    "Prepare AI Context": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "AI Agent",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Respond Accepted": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Dedup Check",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "index": 0,
+            "node": "AI Agent",
+            "type": "ai_outputParser"
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Respond Accepted",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "d195f83e-476e-428b-9d19-2feac8c87d97",
+  "meta": {
+    "instanceId": "a7b845fcef8161f11eeaec81c62713e8142338c2b88e9411b8276e6d7fb00040"
+  },
+  "id": "2fJqxgWUwOeKkkfi",
+  "tags": []
+}
