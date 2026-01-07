@@ -21,17 +21,17 @@ An n8n workflow that automatically classifies documents in Paperless-ngx using A
    - Create tag `ai-processed` in Paperless-ngx
    - Create classification tags (invoice, receipt, contract, etc.)
    - Get Paperless API token
-   - Get OpenRouter API key
+   - Get OpenAI API key
 
 2. **Import & Configure:**
    - Import workflow JSON into n8n
    - Add Paperless API credential (HTTP Header Auth with `Token YOUR_TOKEN`)
-   - Add OpenRouter API credential
+   - Add OpenAI API credential
    - Set Paperless URL in Config node
 
 3. **Assign Credentials:**
    - Assign Paperless API to 9 HTTP nodes
-   - Assign OpenRouter API to OpenRouter Chat Model node
+   - Assign OpenAI API to OpenAI Chat Model node
 
 4. **Test & Activate:**
    - Click "Execute Workflow" to test
@@ -55,7 +55,7 @@ An n8n workflow that automatically classifies documents in Paperless-ngx using A
 
 - **n8n**: Version 2.2.1 or higher (tested on 2.2.1)
 - **Paperless-ngx**: Any recent version with API access
-- **AI Provider**: OpenRouter account (or alternative AI provider)
+- **AI Provider**: OpenAI account (or compatible provider)
 
 ### Paperless-ngx Setup
 
@@ -120,24 +120,22 @@ You need to create credentials for authenticating with your Paperless-ngx API.
 4. Copy the token value
 5. Use it in the format: `Token abc123yourtokenhere`
 
-### Step 3: Configure OpenRouter Credentials
+### Step 3: Configure OpenAI Credentials
 
-You need an OpenRouter API key for the AI classification.
+You need an OpenAI API key for the AI classification.
 
-1. Sign up at [OpenRouter](https://openrouter.ai/) if you don't have an account
-2. Generate an API key from your dashboard
-3. In n8n, go to **Credentials**
-4. Click **Add Credential**
-5. Select **OpenRouter API**
-6. Configure the credential:
-   - **Name**: `OpenRouter API` (or any name you prefer)
-   - **API Key**: Your OpenRouter API key
-7. Click **Save**
+1. Get an OpenAI API key from your OpenAI account
+2. In n8n, go to **Credentials**
+3. Click **Add Credential**
+4. Select **OpenAI API**
+5. Configure the credential:
+   - **Name**: `OpenAI API` (or any name you prefer)
+   - **API Key**: Your OpenAI API key
+6. Click **Save**
 
 **Cost Considerations:**
-- Default model: `anthropic/claude-sonnet-4.5` (~$3 per 1M input tokens, ~$15 per 1M output tokens)
 - For large document collections, start with a small batch to estimate costs
-- See [OpenRouter Pricing](https://openrouter.ai/pricing) for current rates
+- Check your provider's pricing page for current rates
 
 ### Step 4: Configure the Workflow
 
@@ -170,8 +168,8 @@ The workflow has multiple nodes that need credentials. Assign them as follows:
 8. **Create Document Type** → Set to `Paperless API` credential
 9. **Patch Document** → Set to `Paperless API` credential
 
-**Node requiring OpenRouter API credential:**
-1. **OpenRouter Chat Model** → Set to `OpenRouter API` credential
+**Node requiring OpenAI API credential:**
+1. **OpenAI Chat Model** → Set to `OpenAI API` credential
 
 **Quick way to assign credentials:**
 1. In the workflow editor, press `Ctrl+F` (or `Cmd+F` on Mac)
@@ -198,7 +196,7 @@ Before activating the workflow, test it manually:
 Once testing is successful:
 
 1. Toggle the **Active** switch at the top right of the workflow editor
-2. The workflow will now run automatically every hour (default schedule)
+2. The workflow will now run automatically every hour at minute 10 (default schedule)
 
 **To change the schedule:**
 1. Double-click the **Schedule Trigger** node
@@ -210,38 +208,29 @@ Once testing is successful:
 
 ### Changing the AI Model
 
-The workflow uses OpenRouter's Claude Sonnet 4.5 by default, but you can use any model:
+The workflow uses `gpt-5-mini` by default, but you can use any model supported by your OpenAI-compatible provider:
 
-1. Double-click the **OpenRouter Chat Model** node
+1. Double-click the **OpenAI Chat Model** node
 2. Change the **Model** field to your preferred model:
-   - `anthropic/claude-3.5-sonnet` - Faster, cheaper Claude
-   - `openai/gpt-4-turbo` - OpenAI GPT-4 Turbo
-   - `google/gemini-pro-1.5` - Google Gemini
-   - `meta-llama/llama-3.1-70b-instruct` - Open source option
+   - `gpt-4.1-mini`
+   - `gpt-4.1`
+   - `gpt-5-mini`
 3. Optionally adjust **Temperature** (default: 0.1 for consistency)
 4. Click **Save**
 
-See [OpenRouter Models](https://openrouter.ai/models) for all available options.
-
 ### Using a Different AI Provider
 
-You can replace OpenRouter entirely with other AI providers:
+You can replace the **OpenAI Chat Model** node with another provider:
 
-**Option 1: Use n8n's Built-in OpenAI Node**
-1. Delete the **OpenRouter Chat Model** node
-2. Add an **OpenAI Chat Model** node
-3. Connect it to the **Classify Document** AI Agent node (use the `ai_languageModel` connection)
-4. Configure with your OpenAI API key
-
-**Option 2: Use Local LLM (Ollama)**
+**Option 1: Use Local LLM (Ollama)**
 1. Install Ollama and a suitable model (e.g., `llama3`)
-2. Delete the **OpenRouter Chat Model** node
+2. Delete the **OpenAI Chat Model** node
 3. Add an **Ollama Chat Model** node
 4. Configure the Ollama connection URL
 5. Connect it to the **Classify Document** AI Agent node
 
 **Option 3: Use Azure OpenAI**
-1. Delete the **OpenRouter Chat Model** node
+1. Delete the **OpenAI Chat Model** node
 2. Add an **Azure OpenAI Chat Model** node
 3. Configure with your Azure credentials
 4. Connect it to the **Classify Document** AI Agent node
@@ -431,7 +420,7 @@ The workflow is optimized for efficiency:
 - **Solution**: Check the Patch Document node for errors
 
 **High API costs**
-- **Solution**: Switch to a cheaper model (see OpenRouter pricing)
+- **Solution**: Switch to a cheaper model (check your provider pricing)
 - **Solution**: Use a local LLM with Ollama (free but requires self-hosting)
 - **Solution**: Reduce batch size or processing frequency
 
@@ -461,7 +450,7 @@ To test a specific node:
 Periodically review:
 
 1. **Execution history** for failed runs
-2. **API costs** in your OpenRouter dashboard
+2. **API costs** in your provider dashboard
 3. **Classification accuracy** by sampling processed documents
 4. **New correspondents/document types** created by the workflow
 
@@ -523,7 +512,7 @@ The workflow can be extended to:
 ## Security Considerations
 
 1. **API Tokens**: Store Paperless API tokens securely in n8n credentials
-2. **AI Provider**: Document content is sent to the AI provider (OpenRouter/OpenAI) - review their privacy policy
+2. **AI Provider**: Document content is sent to the AI provider (OpenAI or compatible) - review their privacy policy
 3. **Network Access**: Ensure n8n can access Paperless-ngx (firewall rules, network policies)
 4. **Sensitive Documents**: Consider using a local LLM for highly sensitive documents
 
@@ -547,5 +536,4 @@ Built for n8n 2.2.1 and Paperless-ngx.
 **Technologies used:**
 - n8n (workflow automation)
 - Paperless-ngx (document management)
-- OpenRouter (AI model access)
-- Claude Sonnet 4.5 (AI model)
+- OpenAI (AI model access)

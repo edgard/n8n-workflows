@@ -7,7 +7,6 @@ AI-powered webhook endpoint that enriches alerts and notifications from home inf
 - **Single webhook endpoint** for all alert sources (Gatus, Home Assistant, *arr stack, etc.)
 - **AI enrichment** using MetaMCP tools to investigate alerts in real-time
 - **Smart notification sounds** - Alerts play sound, notifications are silent
-- **Deduplication** - Ignores duplicate messages within 2-minute window
 - **Human-friendly output** - Messages your family can understand
 - **Graceful fallback** - Formats raw payload if AI fails
 
@@ -25,7 +24,7 @@ AI-powered webhook endpoint that enriches alerts and notifications from home inf
 ### Prerequisites
 
 1. **n8n** instance (v2.x)
-2. **LiteLLM** proxy with OpenAI-compatible API
+2. **OpenAI API** (or compatible provider)
 3. **MetaMCP** server with infrastructure tools configured
 4. **Telegram Bot** with chat ID
 
@@ -35,7 +34,7 @@ Create these credentials in n8n before importing:
 
 | Name | Type | Purpose |
 |------|------|---------|
-| `LiteLLM API` | OpenAI API | AI model access |
+| `OpenAI API` | OpenAI API | AI model access |
 | `MetaMCP API` | HTTP Bearer Auth | MCP tools endpoint |
 | `Telegram Bot` | Telegram API | Message delivery |
 
@@ -44,15 +43,15 @@ Create these credentials in n8n before importing:
 After importing the workflow, update these values:
 
 1. **OpenAI Chat Model** node:
-   - Update model name if not using `github_copilot/gpt-5-mini`
-   - Connect to your LiteLLM credential
+   - Update model name if not using `gpt-5-mini`
+   - Connect to your OpenAI credential
 
 2. **MetaMCP** node:
    - Update `endpointUrl` to your MetaMCP server
    - Connect to your bearer auth credential
 
 3. **Send Telegram** node:
-   - Replace `YOUR_TELEGRAM_CHAT_ID` with your actual chat ID
+   - Replace the current `chatId` with your actual chat ID
    - Connect to your Telegram Bot credential
 
 ## Webhook Endpoint
@@ -126,29 +125,18 @@ This lets you stay informed about downloads without being disturbed, while still
 ## Architecture
 
 ```
-Webhook → Respond 202 → Dedup Check → Is Duplicate?
-                                          │
-                      ┌───────────────────┘
-                      ↓ (not duplicate)
-              Prepare AI Context → AI Agent → AI Success?
-                                      │           │
-                                      │      ┌────┴────┐
-                         ┌────────────┘      ↓         ↓
-                         │           Format HTML   Fallback
-                    Sub-nodes:           │         Format
-                    - OpenAI Model       └────┬────┘
-                    - MetaMCP                 ↓
-                    - Output Parser    Send Telegram
+Webhook → Respond 202 → AI Agent → AI Success?
+                               │           │
+                               │      ┌────┴────┐
+                  ┌────────────┘      ↓         ↓
+                  │           Format HTML   Fallback
+             Sub-nodes:           │         Format
+             - OpenAI Model       └────┬────┘
+             - MetaMCP                 ↓
+             - Output Parser    Send Telegram
 ```
 
 ## Customization
-
-### Adjusting Deduplication Window
-
-In the **Dedup Check** node, modify:
-```javascript
-const DEDUP_WINDOW_MS = 2 * 60 * 1000; // Change 2 to desired minutes
-```
 
 ### Modifying AI Behavior
 

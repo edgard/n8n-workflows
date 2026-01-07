@@ -18,7 +18,7 @@
       "typeVersion": 1.3,
       "position": [
         2064,
-        5184
+        5200
       ]
     },
     {
@@ -38,10 +38,10 @@
       "id": "300d1558-80fc-4aa4-b4cc-10f8a9f3d739",
       "name": "Config",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
+      "typeVersion": 3.4,
       "position": [
         2288,
-        5184
+        5200
       ]
     },
     {
@@ -72,7 +72,7 @@
       "typeVersion": 4.3,
       "position": [
         2512,
-        5184
+        5200
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -121,7 +121,7 @@
       "typeVersion": 4.3,
       "position": [
         4080,
-        5088
+        5104
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -141,7 +141,7 @@
       "typeVersion": 1,
       "position": [
         4304,
-        5088
+        5104
       ]
     },
     {
@@ -164,7 +164,7 @@
       "typeVersion": 4.3,
       "position": [
         4752,
-        4960
+        4976
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -183,7 +183,7 @@
       "typeVersion": 3,
       "position": [
         4528,
-        5088
+        5104
       ]
     },
     {
@@ -197,13 +197,13 @@
       "typeVersion": 1.3,
       "position": [
         5344,
-        5184
+        5200
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const dictionaries = $('Build Dictionaries').first().json;\nconst documentDetails = $('Fetch Document Details').first().json;\n\nconst toLowerCase = (s) => {\n  if (s == null) return null;\n  const trimmed = s.toString().trim();\n  return trimmed.length > 0 ? trimmed.toLowerCase() : null;\n};\n\nlet aiOutput = $json.output ?? $json;\nif (typeof aiOutput === 'string') {\n  aiOutput = JSON.parse(aiOutput);\n}\n\nconst documentId = documentDetails.id;\n\n// Tags\nconst tagIds = (Array.isArray(aiOutput.tags) ? aiOutput.tags : [])\n  .map(tagName => dictionaries.tagMap[toLowerCase(tagName)])\n  .filter(id => typeof id === 'number');\ntagIds.push(dictionaries.aiProcessedTagId);\n\n// Correspondent\nconst correspondentRaw = aiOutput.correspondent;\nconst correspondentKey = toLowerCase(correspondentRaw);\nconst correspondentMatch = correspondentKey ? dictionaries.correspondentMap[correspondentKey] : null;\nconst correspondentId = correspondentMatch ? correspondentMatch.id : null;\nconst correspondentName = correspondentRaw?.trim() || null;\nconst needCreateCorrespondent = !!(correspondentName && !correspondentId);\n\n// Document type\nconst documentTypeRaw = aiOutput.document_type;\nconst documentTypeKey = toLowerCase(documentTypeRaw);\nconst documentTypeId = documentTypeKey ? dictionaries.documentTypeMap[documentTypeKey] : null;\nconst needCreateDocumentType = !!(documentTypeKey && !documentTypeId);\n\nconst patchBody = {\n  tags: tagIds,\n  correspondent: correspondentId,\n  document_type: documentTypeId\n};\n\nconst title = aiOutput.title?.trim() || null;\nconst date = aiOutput.date?.trim() || null;\nif (title) patchBody.title = title;\nif (date) patchBody.created_date = date;\n\nreturn {\n  json: {\n    id: documentId,\n    patchBody,\n    correspondentName,\n    correspondentKey,\n    documentTypeName: documentTypeKey,\n    needCreateCorrespondent,\n    needCreateDocumentType\n  }\n};"
+        "jsCode": "const dictionaries = $('Build Dictionaries').first().json;\nconst documentDetails = $('Fetch Document Details').first().json;\n\nconst emptyValue = null;\n\nconst toLowerCase = (s) => {\n  if (s == null) return emptyValue;\n  const trimmed = s.toString().trim();\n  return trimmed.length > 0 ? trimmed.toLowerCase() : emptyValue;\n};\n\nlet aiOutput = $json.output;\nif (aiOutput == null) {\n  aiOutput = $json;\n}\nif (typeof aiOutput === 'string') {\n  aiOutput = JSON.parse(aiOutput);\n}\n\nconst documentId = documentDetails.id;\n\n// Tags\nconst tagIds = (Array.isArray(aiOutput.tags) ? aiOutput.tags : [])\n  .map(tagName => dictionaries.tagMap[toLowerCase(tagName)])\n  .filter(id => typeof id === 'number');\ntagIds.push(dictionaries.aiProcessedTagId);\n\n// Correspondent\nconst correspondentRaw = aiOutput.correspondent;\nconst correspondentKey = toLowerCase(correspondentRaw);\nconst correspondentMatch = correspondentKey ? dictionaries.correspondentMap[correspondentKey] : null;\nconst correspondentId = correspondentMatch ? correspondentMatch.id : null;\nconst correspondentName = correspondentRaw ? correspondentRaw.trim() : null;\nconst needCreateCorrespondent = !!(correspondentName && !correspondentId);\n\n// Document type\nconst documentTypeRaw = aiOutput.document_type;\nconst documentTypeKey = toLowerCase(documentTypeRaw);\nconst documentTypeId = documentTypeKey ? dictionaries.documentTypeMap[documentTypeKey] : null;\nconst needCreateDocumentType = !!(documentTypeKey && !documentTypeId);\n\nconst patchBody = {\n  tags: tagIds,\n  correspondent: correspondentId,\n  document_type: documentTypeId\n};\n\nconst title = aiOutput.title ? aiOutput.title.trim() : null;\nconst date = aiOutput.date ? aiOutput.date.trim() : null;\nif (title) patchBody.title = title;\nif (date) patchBody.created_date = date;\n\nreturn {\n  json: {\n    id: documentId,\n    patchBody: patchBody,\n    correspondentName: correspondentName,\n    correspondentKey: correspondentKey,\n    documentTypeName: documentTypeKey,\n    needCreateCorrespondent: needCreateCorrespondent,\n    needCreateDocumentType: needCreateDocumentType\n  }\n};"
       },
       "id": "21821008-57f9-4b2f-9ded-573e50630212",
       "name": "Plan Updates",
@@ -211,7 +211,7 @@
       "typeVersion": 2,
       "position": [
         5552,
-        4960
+        4976
       ]
     },
     {
@@ -220,7 +220,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 3
           },
           "conditions": [
             {
@@ -241,10 +242,10 @@
       "id": "1b55696b-5eb4-46c6-9608-d34e3f38defd",
       "name": "Need Create Correspondent?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.3,
       "position": [
         5776,
-        4960
+        4976
       ]
     },
     {
@@ -286,7 +287,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 3
           },
           "conditions": [
             {
@@ -307,10 +309,10 @@
       "id": "1d8303a4-d9c4-4c48-9435-87f0db37eda9",
       "name": "Need Create Document Type?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.3,
       "position": [
         6448,
-        4960
+        4976
       ]
     },
     {
@@ -370,7 +372,7 @@
       "typeVersion": 4.3,
       "position": [
         7120,
-        5088
+        5104
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -406,7 +408,7 @@
       "typeVersion": 4.3,
       "position": [
         3184,
-        5088
+        5104
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -442,7 +444,7 @@
       "typeVersion": 4.3,
       "position": [
         3408,
-        5088
+        5104
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -478,7 +480,7 @@
       "typeVersion": 4.3,
       "position": [
         3632,
-        5088
+        5104
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -497,7 +499,7 @@
       "typeVersion": 2,
       "position": [
         3856,
-        5088
+        5104
       ]
     },
     {
@@ -511,7 +513,7 @@
       "typeVersion": 2,
       "position": [
         4976,
-        4960
+        4976
       ]
     },
     {
@@ -520,7 +522,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 3
           },
           "conditions": [
             {
@@ -541,10 +544,10 @@
       "id": "5b02268a-7f98-4304-b8f7-ac776e5ec56e",
       "name": "AI Tag Found?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.3,
       "position": [
         2736,
-        5184
+        5200
       ]
     },
     {
@@ -564,10 +567,10 @@
       "id": "5fb2f59f-84f9-4cc0-9f05-54b5bbb6cd6d",
       "name": "Set AI Tag ID",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
+      "typeVersion": 3.4,
       "position": [
         2960,
-        5088
+        5104
       ]
     },
     {
@@ -580,7 +583,7 @@
       "typeVersion": 1,
       "position": [
         2960,
-        5280
+        5296
       ]
     },
     {
@@ -615,9 +618,9 @@
       "parameters": {
         "model": {
           "__rl": true,
-          "value": "github_copilot/gpt-5-mini",
+          "value": "gpt-5-mini",
           "mode": "list",
-          "cachedResultName": "github_copilot/gpt-5-mini"
+          "cachedResultName": "gpt-5-mini"
         },
         "responsesApiEnabled": false,
         "options": {}
@@ -626,14 +629,16 @@
       "typeVersion": 1.3,
       "position": [
         5216,
-        5184
+        5200
       ],
       "id": "1ca959f1-001a-4573-8fcc-ea9631a6b4ec",
-      "name": "LiteLLM Chat Model",
+      "name": "OpenAI Chat Model",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
       "credentials": {
         "openAiApi": {
-          "id": "Vvl8RVPpQyA7VdMe",
-          "name": "LiteLLM API"
+          "id": "gfJuJP3bvXTASzd6",
+          "name": "OpenAI API"
         }
       }
     },
@@ -655,7 +660,7 @@
       "typeVersion": 1.9,
       "position": [
         5200,
-        4960
+        4976
       ],
       "id": "828a1298-4406-4807-b5e4-309e2cacb630",
       "name": "Classify Document"
@@ -938,7 +943,7 @@
         ]
       ]
     },
-    "LiteLLM Chat Model": {
+    "OpenAI Chat Model": {
       "ai_languageModel": [
         [
           {
@@ -964,9 +969,10 @@
   "active": true,
   "settings": {
     "executionOrder": "v1",
-    "availableInMCP": false
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "72410c77-45f0-4dd0-9223-35619d206530",
+  "versionId": "4ce69fdd-ae14-4a8f-96f4-85a53d660e1d",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "a7b845fcef8161f11eeaec81c62713e8142338c2b88e9411b8276e6d7fb00040"
