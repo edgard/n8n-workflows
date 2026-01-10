@@ -1,0 +1,307 @@
+{
+  "name": "Home Notification Enricher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alert-enricher",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Webhook",
+      "position": [
+        0,
+        48
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "bfe23a4d-bf0b-40d8-93d1-a1b3c63b975f"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"processing\", \"received\": $now.toISO() } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+      "name": "Respond Accepted",
+      "position": [
+        224,
+        48
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "c9d0e1f2-a3b4-5678-2345-901234567890",
+      "name": "OpenAI Chat Model",
+      "position": [
+        464,
+        272
+      ],
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openAiApi": {
+          "id": "gfJuJP3bvXTASzd6",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"message_type\": {\n      \"type\": \"string\",\n      \"enum\": [\"alert\", \"notification\"],\n      \"description\": \"Use 'alert' if someone might need to act or service is meaningfully broken; use 'notification' for routine info/success updates.\"\n    },\n    \"title\": {\n      \"type\": \"string\",\n      \"description\": \"2–4 words. Human/punchy. No jargon, no IDs, no timestamps. Examples: 'Plex Down', 'Door Unlocked', 'Backup Finished'.\"\n    },\n    \"severity\": {\n      \"type\": \"string\",\n      \"enum\": [\"critical\", \"warning\", \"info\"],\n      \"description\": \"critical = safety/security or urgent outage; warning = degraded/unstable/near limits; info = normal/routine/success.\"\n    },\n    \"emoji\": {\n      \"type\": \"string\",\n      \"description\": \"Exactly one emoji that matches the mood/area (e.g., 📺 for Plex, 🔓 for door unlocked, ✅ for success, ⚠️ for warning).\"\n    },\n    \"summary\": {\n      \"type\": \"string\",\n      \"description\": \"Family-friendly summary in 1–3 short sentences. Include: what happened + what it means for us + (optional) likely cause in plain English + (optional) what happens next. Keep detail that’s human-meaningful (service/device/room/movie title, counts, percent-full). Do NOT include raw technical identifiers: IPs/ports/URLs with tokens, UUIDs, MACs, container IDs, stack traces, full log lines, exact timestamps, or error codes; translate them to plain language ('connection problem', 'server restarted', 'storage nearly full').\"\n    },\n    \"source\": {\n      \"type\": \"string\",\n      \"description\": \"Human-friendly name of the system that produced the event (e.g., 'Home Assistant', 'Gatus', 'Plex', 'Sonarr'). No hostnames/URLs.\"\n    }\n  },\n  \"required\": [\"message_type\", \"title\", \"severity\", \"emoji\", \"summary\", \"source\"],\n  \"additionalProperties\": false\n}"
+      },
+      "id": "f2a3b4c5-d6e7-8901-5678-234567890123",
+      "name": "Structured Output Parser",
+      "position": [
+        592,
+        272
+      ],
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "success-condition",
+              "leftValue": "={{ $json.output.title }}",
+              "operator": {
+                "operation": "notEmpty",
+                "type": "string"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a3b4c5d6-e7f8-9012-6789-345678901234",
+      "name": "AI Success?",
+      "position": [
+        800,
+        48
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Format enriched message as HTML for Telegram\nconst output = $json.output;\n\nconst escapeHtml = (text) => {\n  if (!text) return '';\n  return String(text)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n};\n\n// Map severity to a secondary status emoji\nconst severityMap = {\n  'critical': '🔴',\n  'warning': '🟡',\n  'info': '🔵'\n};\nconst severityIcon = severityMap[output.severity] || '';\n\n// Build the components\nconst emoji = output.emoji || '🔔';\nconst title = escapeHtml(output.title || 'Message');\nconst source = escapeHtml(output.source || 'System');\nconst summary = escapeHtml(output.summary || '');\n\n// Construct the final message\nlet message = `${emoji} <b>${title}</b> ${severityIcon}\\n\\n${summary}`;\n\n// if (source) {\n//   message += `\\n\\n<i>via ${source}</i>`;\n// }\n\n// Logic: Notifications are silent, Alerts play sound\nlet disableNotification = output.message_type === 'notification';\n\n// Override: Always play sound for CRITICAL\nif (output.severity === 'critical') {\n  disableNotification = false;\n}\n\n// Override: Always mute INFO\nif (output.severity === 'info') {\n  disableNotification = true;\n}\n\nreturn {\n  json: {\n    message: message,\n    disableNotification: disableNotification\n  }\n};"
+      },
+      "id": "b4c5d6e7-f8a9-0123-7890-456789012345",
+      "name": "Format HTML Message",
+      "position": [
+        1024,
+        -48
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Format failed summarizer messages as HTML for Telegram\nlet output = $json.output;\n\n// 1. Safety check: If output is an object, stringify it so we don't get \"[object Object]\"\nif (typeof output === 'object' && output !== null) {\n  output = JSON.stringify(output, null, 2);\n}\n\nconst escapeHtml = (text) => {\n  if (!text) return '';\n  return String(text)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n};\n\nconst title = '⚠️ AI Enrichment Failed';\nconst message = `<b>${title}</b>\\n\\nCould not process notification. Raw output:\\n<pre>${escapeHtml(output)}</pre>`;\n\n// Fallback always plays sound (assume it's important)\nreturn {\n  json: {\n    message: message,\n    disableNotification: false\n  }\n};"
+      },
+      "id": "c5d6e7f8-a9b0-1234-8901-567890123456",
+      "name": "Fallback Format",
+      "position": [
+        1024,
+        144
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "chatId": "52094995",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": "={{ $json.disableNotification === true }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "d6e7f8a9-b0c1-2345-9012-678901234567",
+      "name": "Send Telegram",
+      "position": [
+        1248,
+        48
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "7c608e11-ddd0-4edc-9c1a-9d90a52c5172",
+      "credentials": {
+        "telegramApi": {
+          "id": "4dyOOpYrre5uMlm9",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Transform this webhook event into the required schema using the system rules.\n\n\nPAYLOAD:\n{{ JSON.stringify({\n  body: $json.body,\n  source_hint: {\n    user_agent: $json.headers?.[\"user-agent\"]\n  }\n}, null, 2) }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the Central Alerting Engine. Convert technical JSON events into a friendly, family-group-chat message.\n\nOUTPUT RULES (IMPORTANT)\n- Output ONLY a single JSON object that matches the provided schema.\n- Do not include extra keys.\n- Keep the summary readable on a phone.\n\nGOAL: KEEP MAXIMUM USEFUL DETAIL WITHOUT TECHNICAL NOISE\nPreserve *meaningful* details like:\n- What happened (state change, success/failure, up/down)\n- What it affects for us (impact: “streaming won’t work”, “door is unlocked”)\n- Where/which thing (friendly device/room/service name: “Plex”, “Living Room TV”, “Front Door”)\n- The likely reason, stated plainly (e.g., “internet hiccup”, “server restarted”, “storage is nearly full”)\n- What will happen next / what I’ll do (e.g., “I’ll keep an eye on it”, “I restarted it”, “try again soon”)\n\nREMOVE OR GENERALIZE technical identifiers:\n- Never include: IP addresses, ports, URLs with tokens, API keys, UUIDs, MACs, stack traces, full log lines, container IDs, commit hashes.\n- Never include exact timestamps; use “just now”, “a few minutes ago”, “today”, etc.\n- Never include raw error codes/messages verbatim (e.g., “ECONNREFUSED”, “500”); translate to plain language like “connection problem” or “service error”.\n\nSAFE SPECIFICS ARE OK if they’re human-meaningful:\n- Movie/show titles, user-friendly device names, room names, app names.\n- Percentages when they matter (e.g., “storage is almost full”) but avoid mount paths.\n- Counts in plain terms (“3 retries failed”, “2 devices offline”).\n\nDETAIL BUDGET (how to stay detailed without sounding technical)\n- summary: 1–3 short sentences maximum.\n- Sentence 1: what happened + what it means for us.\n- Sentence 2 (optional): extra context (where/which component) + likely cause in plain English.\n- Sentence 3 (optional): what I did / what we should do / what’s next.\n\nTONE (“family member vibe”)\n- Casual, helpful, non-alarming unless critical.\n- Avoid robot phrasing like “Event detected”.\n\nSEVERITY RULES\n- critical: security/safety (doors, alarms), data loss risk, or core service down affecting people now.\n- warning: degraded/unstable, retries needed, nearing limits (disk almost full), partial outages.\n- info: success, routine state changes, non-urgent notices.\n\nMESSAGE TYPE\n- alert: something needs attention or could impact people.\n- notification: informational / success / routine.\n\nTITLE RULES (2–4 words)\n- Punchy, human-friendly, no jargon. Examples: “Plex Down”, “Door Unlocked”, “Download Finished”.\n- If helpful, include source prefix only if it stays short.\n\nEMOJI\n- Exactly one emoji matching mood (✅ ℹ️ ⚠️ 🚨 🔒 📺 📥 etc.)\n\nSOURCE\n- Use the best human name for the sending system/service (e.g., “Gatus”, “Home Assistant”, “Plex”, “Sonarr”)."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        448,
+        48
+      ],
+      "id": "e96aacf9-1950-4b62-9629-f8e84c706f7a",
+      "name": "Message Processor",
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "AI Success?": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Format HTML Message",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Fallback Format",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fallback Format": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Send Telegram",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Format HTML Message": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Send Telegram",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Message Processor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Message Processor",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Respond Accepted",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Respond Accepted": {
+      "main": [
+        [
+          {
+            "node": "Message Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Processor": {
+      "main": [
+        [
+          {
+            "node": "AI Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "7ed9f564-7682-4afc-a82f-6459164b62a2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a7b845fcef8161f11eeaec81c62713e8142338c2b88e9411b8276e6d7fb00040"
+  },
+  "id": "2fJqxgWUwOeKkkfi",
+  "tags": []
+}

@@ -4,19 +4,20 @@ A collection of n8n automation workflows for various use cases.
 
 ## Workflows
 
-### Home Notification Enricher
-**File:** `Home Notification Enricher.json`
-**Documentation:** [Home Notification Enricher.README.md](./Home%20Notification%20Enricher.README.md)
+### Home Alert Hub
+**File:** `Home Alert Hub.json`
+**Documentation:** [Home Alert Hub.README.md](./Home%20Alert%20Hub.README.md)
 
-AI-powered webhook endpoint that enriches alerts and notifications from home infrastructure, then sends human-friendly messages to Telegram.
+Central AI-powered alert processing hub for home infrastructure. Receives alerts from various sources, enriches them with AI for human-friendly messaging, sends to Telegram, and announces critical alerts via voice on house speakers.
 
 **Features:**
-- Single webhook endpoint for all alert sources (Gatus, Home Assistant, *arr stack)
-- AI enrichment using MetaMCP tools to investigate alerts in real-time
-- Smart notification sounds (alerts play sound, notifications are silent)
+- Single webhook endpoint for all alert sources
+- AI enrichment with structured output (title, summary, severity, emoji)
+- Smart notification sounds (critical = sound, info = silent)
+- Voice announcements for critical/safety alerts via TTS
 - Graceful fallback if AI fails
 
-**Requirements:** n8n 2.x, OpenAI API (or compatible), MetaMCP server, Telegram Bot
+**Requirements:** n8n 2.x, OpenAI API, Telegram Bot, Home Assistant with TTS integration
 
 ---
 
